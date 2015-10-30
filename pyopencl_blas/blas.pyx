@@ -722,6 +722,62 @@ def axpy(queue, x, y, alpha=1.0):
 #         raise RuntimeError("'asum' failed: %s" % get_status_message(err))
 
 
+########## TRSV ##########
+cdef extern from "clBLAS.h":
+    clblasStatus clblasDtrsv(
+            clblasOrder order,
+            clblasUplo uplo,
+            clblasTranspose trans,
+            clblasDiag diag,
+            size_t N,
+            const cl_mem A,
+            size_t offa,
+            size_t lda,
+            cl_mem X,
+            size_t offx,
+            int incx,
+            cl_uint numCommandQueues,
+            cl_command_queue *commandQueues,
+            cl_uint numEventsInWaitList,
+            const cl_event *eventWaitList,
+            cl_event *events)
+
+
+def trsv(queue, A, x, bool transA=False, bool lower=True):
+    dtype = check_dtype([A, x], ['float32', 'float64', 'complex64', 'complex128'])
+    check_matrix(A, 'A')
+    check_vector(x, 'x')
+
+    cdef size_t N = A.shape[0]
+    check_shape_dim(x.shape, 0, N, 'x')
+
+    cdef size_t element_size = dtype_size[dtype]
+    cdef cl_mem Adata = <cl_mem><size_t> A.base_data.int_ptr
+    cdef size_t offa = A.offset / element_size
+    cdef size_t lda = A.strides[0] / element_size
+    cdef cl_mem xdata = <cl_mem><size_t> x.base_data.int_ptr
+    cdef size_t offx = x.offset / element_size
+    cdef int incx = x.strides[0] / element_size
+
+    cdef cl_uint numCommandQueues = 1
+    cdef cl_command_queue commandQueue = <cl_command_queue><size_t>queue.int_ptr
+    cdef cl_uint numEventsInWaitList = 0
+    cdef cl_event *eventWaitList = NULL
+    cdef cl_event event = NULL
+
+    cdef clblasStatus
+    if dtype == np.dtype('float64'):
+        err = clblasDtrsv(clblasRowMajor, clblasLower if lower else clblasUpper,
+                          clblasTrans if transA else clblasNoTrans, clblasNonUnit,
+                          N, Adata, offa, lda, xdata, offx, incx, numCommandQueues,
+                          &commandQueue, numEventsInWaitList, eventWaitList, &event)
+
+    if err != clblasSuccess:
+        raise RuntimeError("'trsv' failed: %s" % get_status_message(err))
+
+    return cl.Event.from_int_ptr(<size_t>event)
+
+
 ########## GEMV ##########
 cdef extern from "clBLAS.h":
     clblasStatus clblasSgemv(

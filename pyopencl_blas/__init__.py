@@ -3,4 +3,5 @@ from .blas import (  # noqa: F401
     swap, scal, copy, axpy,
     gemv,
     gemm,
+    trsv,
 )

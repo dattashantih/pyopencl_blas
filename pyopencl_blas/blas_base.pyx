@@ -64,6 +64,14 @@ cdef extern from "clBLAS.h":
         clblasTrans
         clblasConjTrans
 
+    ctypedef enum clblasUplo:
+        clblasUpper
+        clblasLower
+
+    ctypedef enum clblasDiag:
+        clblasUnit
+        clblasNonUnit
+
 
 cdef get_status_message(clblasStatus status):
     if status == clblasSuccess:
