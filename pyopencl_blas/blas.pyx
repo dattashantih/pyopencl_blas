@@ -513,79 +513,89 @@ def axpy(queue, x, y, alpha=1.0):
 # TODO: implement scratch buffers for the following functions
 
 # ########## DOT ##########
-# cdef extern from "clBLAS.h":
-#     clblasStatus clblasSdot(
-#         size_t N,
-#         cl_float alpha,
-#         cl_mem X,
-#         size_t offx,
-#         int incx,
-#         cl_mem Y,
-#         size_t offy,
-#         int incy,
-#         cl_uint numCommandQueues,
-#         cl_command_queue *commandQueues,
-#         cl_uint numEventsInWaitList,
-#         const cl_event *eventWaitList,
-#         cl_event *events)
-#     clblasStatus clblasDdot(
-#         size_t N,
-#         cl_double alpha,
-#         cl_mem X,
-#         size_t offx,
-#         int incx,
-#         cl_mem Y,
-#         size_t offy,
-#         int incy,
-#         cl_uint numCommandQueues,
-#         cl_command_queue *commandQueues,
-#         cl_uint numEventsInWaitList,
-#         const cl_event *eventWaitList,
-#         cl_event *events)
+cdef extern from "clBLAS.h":
+    clblasStatus clblasSdot(
+        size_t N,
+        cl_mem dotProduct,
+        size_t offDP,
+        cl_mem X,
+        size_t offx,
+        int incx,
+        cl_mem Y,
+        size_t offy,
+        int incy,
+        cl_mem scratchBuff,
+        cl_uint numCommandQueues,
+        cl_command_queue *commandQueues,
+        cl_uint numEventsInWaitList,
+        const cl_event *eventWaitList,
+        cl_event *events)
+    clblasStatus clblasDdot(
+        size_t N,
+        cl_mem dotProduct,
+        size_t offDP,
+        cl_mem X,
+        size_t offx,
+        int incx,
+        cl_mem Y,
+        size_t offy,
+        int incy,
+        cl_mem scratchBuff,
+        cl_uint numCommandQueues,
+        cl_command_queue *commandQueues,
+        cl_uint numEventsInWaitList,
+        const cl_event *eventWaitList,
+        cl_event *events)
 
 
-# def dot(queue, x, y, d):
-#     """d <- dot(x, y)"""
-#     dtype = check_dtype([x, y, d], ['float32', 'float64'])
-#     check_vector(x, 'x')
-#     check_vector(y, 'y')
-#     check_scalar(d, 'd')
+def dot(queue, x, y, d, scratch=None):
+    """d <- dot(x, y)"""
+    dtype = check_dtype([x, y, d], ['float32', 'float64'])
+    check_vector(x, 'x')
+    check_vector(y, 'y')
+    check_vector(d, 'd')
 
-#     cdef size_t N = x.shape[0]
-#     check_shape_dim(y.shape, 0, N, 'y')
+    if scratch is None:
+        scratch = Array(queue, x.shape, x.dtype)
 
-#     cdef size_t element_size = dtype_size[dtype]
-#     cdef cl_mem ddata = <cl_mem><size_t>d.base_data.int_ptr
-#     cdef size_t offd = d.offset / element_size
-#     cdef cl_mem xdata = <cl_mem><size_t>x.base_data.int_ptr
-#     cdef size_t offx = x.offset / element_size
-#     cdef int incx = x.strides[0] / element_size
-#     cdef cl_mem ydata = <cl_mem><size_t>y.base_data.int_ptr
-#     cdef size_t offy = y.offset / element_size
-#     cdef int incy = y.strides[0] / element_size
+    cdef size_t N = x.shape[0]
+    check_shape_dim(y.shape, 0, N, 'y')
 
-#     cdef cl_uint numCommandQueues = 1
-#     cdef cl_command_queue commandQueue = <cl_command_queue><size_t>queue.int_ptr
-#     cdef cl_uint numEventsInWaitList = 0
-#     cdef cl_event *eventWaitList = NULL
-#     cdef cl_event event = NULL
+    cdef size_t element_size = dtype_size[dtype]
+    cdef cl_mem ddata = <cl_mem><size_t>d.base_data.int_ptr
+    cdef size_t offd = d.offset / element_size
+    cdef cl_mem xdata = <cl_mem><size_t>x.base_data.int_ptr
+    cdef size_t offx = x.offset / element_size
+    cdef int incx = x.strides[0] / element_size
+    cdef cl_mem ydata = <cl_mem><size_t>y.base_data.int_ptr
+    cdef size_t offy = y.offset / element_size
+    cdef int incy = y.strides[0] / element_size
+    cdef cl_mem scratch_data = <cl_mem><size_t>scratch.base_data.int_ptr
 
-#     cdef clblasStatus
-#     if dtype == np.dtype('float32'):
-#         err = clblasSdot(
-#             N, ddata, offd, xdata, offx, incx, ydata, offy, incy,
-#             numCommandQueues, &commandQueue,
-#             numEventsInWaitList, eventWaitList, &event)
-#     elif dtype == np.dtype('float64'):
-#         err = clblasDdot(
-#             N, ddata, offd, xdata, offx, incx, ydata, offy, incy,
-#             numCommandQueues, &commandQueue,
-#             numEventsInWaitList, eventWaitList, &event)
-#     else:
-#         raise ValueError("Unrecognized dtype '%s'" % dtype)
+    cdef cl_uint numCommandQueues = 1
+    cdef cl_command_queue commandQueue = <cl_command_queue><size_t>queue.int_ptr
+    cdef cl_uint numEventsInWaitList = 0
+    cdef cl_event *eventWaitList = NULL
+    cdef cl_event event = NULL
 
-#     if err != clblasSuccess:
-#         raise RuntimeError("'dot' failed: %s" % get_status_message(err))
+    cdef clblasStatus
+    if dtype == np.dtype('float32'):
+        err = clblasSdot(
+            N, ddata, offd, xdata, offx, incx, ydata, offy, incy,
+            scratch_data,
+            numCommandQueues, &commandQueue,
+            numEventsInWaitList, eventWaitList, &event)
+    elif dtype == np.dtype('float64'):
+        err = clblasDdot(
+            N, ddata, offd, xdata, offx, incx, ydata, offy, incy,
+            scratch_data,
+            numCommandQueues, &commandQueue,
+            numEventsInWaitList, eventWaitList, &event)
+    else:
+        raise ValueError("Unrecognized dtype '%s'" % dtype)
+
+    if err != clblasSuccess:
+        raise RuntimeError("'dot' failed: %s" % get_status_message(err))
 
 
 # ########## NRM2 ##########
